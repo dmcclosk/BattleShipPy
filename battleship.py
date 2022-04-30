@@ -1,19 +1,33 @@
+from doctest import master
 import pygame
+import serial
 import sys
+import random
 pygame.init()
 
+
+
+ser = serial.Serial()
+ser.baudrate = 9600
+ser.port = '/dev/cu.usbmodem101'
+ser.open()
+
+#game setup
 win = pygame.display.set_mode((600,600))
 win.fill((255,255,255))
 
 pygame.display.set_caption("Battleship: Arduino")
-
-cont = 1
 
 height = 40
 width = 40
 
 PlayerBoard = {}
 CPUBoard = {}
+
+master_dict = {'a1': 1, 'b1': 2, 'c1': 3, 'd1': 4,
+               'a2': 5, 'b2': 6, 'c2': 7, 'd2': 8,
+               'a3': 9, 'b3': 10,'c3': 11,'d3': 12,
+               'a4': 13,'b4': 14,'c4': 15,'d4': 16}
 
 def update_game_text(text):
     font = pygame.font.Font('freesansbold.ttf', 18)
@@ -117,19 +131,55 @@ def setup_boards(PlayerBoard, CPUBoard):
     
     return(PlayerBoard, CPUBoard)
 
+def is_valid(start, spot):
+    front = master_dict[start]
+    back = master_dict[spot]
+    if front == back:
+        return False
+    if (front%4 ==0) and (front+1 == back):
+        return False   
+    if ((front -1) %4 ==0) and (back-1 == front):
+        return False
+    
+    if ((front + 1 == back) or (front-1 == back)) or ((front + 4 == back) or (front-4 == back)):
+        return True
+
+
+def valid_placement(start):
+    valid_ends = []
+    for spot in list(master_dict.keys()):
+        if is_valid(start, spot):
+            valid_ends.append(spot)
+    
+    return valid_ends
+        
+
+def initialize_game():
+    keys = list(CPUBoard.keys())
+    start_boat = random.choice(keys)
+    print(start_boat)
+    valid_ends = valid_placement(start_boat)
+    print(valid_ends)
     
 PlayerBoard, CPUBoard = setup_boards(PlayerBoard, CPUBoard)
 setup_Area()
+initialize_game()
 
-haha = 1
+
+
+pygame.display.update()
+
+cont = 1
 while cont:
     pygame.time.delay(100)
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             cont = 0
     
-    update_game_text(str(haha))
-    haha+=1
+    #user_entry = str(ser.readline())[2:-5]
+
+    #update_game_text(user_entry)
+    
     pygame.display.update()
 
 pygame.quit()
