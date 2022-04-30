@@ -3,6 +3,7 @@ import pygame
 import serial
 import sys
 import random
+import time
 pygame.init()
 
 
@@ -29,15 +30,38 @@ master_dict = {'a1': 1, 'b1': 2, 'c1': 3, 'd1': 4,
                'a3': 9, 'b3': 10,'c3': 11,'d3': 12,
                'a4': 13,'b4': 14,'c4': 15,'d4': 16}
 
+def update_square(board, square, update_type):
+    if update_type == 'hit':
+        color = (226, 21, 21)
+    elif update_type == 'miss':
+        color = (0, 0, 0)
+    elif update_type == 'ship':
+        color = (122, 111, 111)
+    
+    xloc, yloc = board[square]
+    pygame.draw.rect(win, color, (xloc, yloc, height, width))
+    
+
+def user_wake():
+    value = str(ser.readline())[2:-5]
+    return value
+
+
+def user_input():
+    value = ''
+    while len(value) < 2:
+        value = value + str(ser.readline())[2:-5]
+    return value.lower()
+
+
 def update_game_text(text):
+    pygame.draw.rect(win, (255, 255, 255), (0, 300, 600, 450))
     font = pygame.font.Font('freesansbold.ttf', 18)
     text = font.render(text, True, (0,0,0), (255,255,255))
     textrect = text.get_rect()
     textrect.center= (300, 400)
     win.blit(text, textrect)
-    pass
-
-def update_update_text(text):
+    pygame.display.update()
     pass
 
 
@@ -88,7 +112,7 @@ def setup_boards(PlayerBoard, CPUBoard):
     xloc = 50
     yloc = 50
 
-    #player Board
+    #CPU Board
     for y in range(4):
         for x in range(4):
             xgen = xloc + (50*x)
@@ -108,7 +132,7 @@ def setup_boards(PlayerBoard, CPUBoard):
             
             PlayerBoard[space] = (xgen, ygen)
 
-    #CPU Board
+    #Player Board
     xloc = xloc+300
     for y in range(4):
         for x in range(4):
@@ -129,7 +153,8 @@ def setup_boards(PlayerBoard, CPUBoard):
             
             CPUBoard[space] = (xgen, ygen)
     
-    return(PlayerBoard, CPUBoard)
+    return(CPUBoard, PlayerBoard)
+
 
 def is_valid(start, spot):
     front = master_dict[start]
@@ -138,7 +163,7 @@ def is_valid(start, spot):
         return False
     if (front%4 ==0) and (front+1 == back):
         return False   
-    if ((front -1) %4 ==0) and (back-1 == front):
+    if ((front -1) %4 ==0) and (front-1 == back):
         return False
     
     if ((front + 1 == back) or (front-1 == back)) or ((front + 4 == back) or (front-4 == back)):
@@ -154,31 +179,144 @@ def valid_placement(start):
     return valid_ends
         
 
-def initialize_game():
+def initialize_game(PlayerBoard, CPUBoard):
+    #get player and CPU boat locations to fully finish setting up the board state
     keys = list(CPUBoard.keys())
     start_boat = random.choice(keys)
-    print(start_boat)
     valid_ends = valid_placement(start_boat)
-    print(valid_ends)
+    end_boat = random.choice(valid_ends)
+    CPUloc = start_boat, end_boat
+    Playerloc = 0
+    update_game_text("Enter a number to wake the game")
+    wakeup = user_wake()
+
+    p1_start = 0
+    p1_end = 0
+    while p1_start not in master_dict.keys():
+        update_game_text("Enter a position for the front of your ship")
+        p1_start = user_input()
+        if p1_start not in master_dict.keys():
+            update_game_text("Invalid. Trying Again.")
+            pygame.time.delay(500)
+    
+    update_game_text(f"You entered {p1_start}. Select a position for the back of your ship")
+
+    valid_ends = valid_placement(p1_start)
+    while p1_end not in valid_ends:
+        p1_end = user_input()
+        if p1_end not in valid_ends:
+            update_game_text("Invalid end position. Trying Again.")
+            pygame.time.delay(500)
+    
+    update_game_text(f"You entered {p1_end}. Drawing ship as grey squares...")
+    pygame.time.delay(1000)
+
+    Playerloc = p1_start, p1_end
+
+    update_square(PlayerBoard, p1_start, 'ship')
+    update_square(PlayerBoard, p1_end, 'ship')
+
+    return CPUloc, Playerloc
     
 PlayerBoard, CPUBoard = setup_boards(PlayerBoard, CPUBoard)
 setup_Area()
-initialize_game()
+CPUloc, Playerloc = initialize_game(PlayerBoard, CPUBoard)
 
+print(CPUloc)
 
 
 pygame.display.update()
 
-cont = 1
-while cont:
+winner = None
+player_shots = []
+cpu_shots = []
+player_hits = []
+cpu_hits = []
+while winner == None:
     pygame.time.delay(100)
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             cont = 0
-    
-    #user_entry = str(ser.readline())[2:-5]
+    p_shot = 0
+    cpu_shot = 0
 
-    #update_game_text(user_entry)
+    ###############
+    # PLAYER TURN #
+    ###############
+    while (p_shot not in master_dict.keys() or (p_shot in player_shots)):
+        update_game_text("It is your turn. Fire a shot")
+        p_shot = user_input()
+        if (p_shot not in master_dict.keys() or (p_shot in player_shots)):
+            update_game_text("Invalid firing solution. Try Again.")
+            pygame.time.delay(700)
+    
+    if p_shot in CPUloc:
+        update_game_text(f"{p_shot} was a hit. Marking")
+        update_square(CPUBoard, p_shot, 'hit')
+        player_hits.append(p_shot)
+    else:
+        update_game_text(f"{p_shot} was a miss. Marking")
+        update_square(CPUBoard, p_shot, 'miss')
+
+    player_shots.append(p_shot)
+    pygame.time.delay(2000)
+
+    #Player winner check
+    if len(player_hits)==2:
+        update_game_text("Congratulations, you win! Enter any value to close the game.")
+        user_wake()
+        pygame.quit()
+
+    ###############
+    #  CPU  TURN  #
+    ###############
+
+    update_game_text("CPU Turn will now start...")    
+    pygame.time.delay(2000)
+
+    if cpu_hits == []:
+        cpu_shot = random.choice(list(master_dict.keys()))
+        while cpu_shot in cpu_shots:
+            cpu_shot = random.choice(list(master_dict.keys()))
+        
+        if cpu_shot in Playerloc:
+            update_game_text(f"CPU hit your ship at {cpu_shot}. Marking")
+            update_square(PlayerBoard, cpu_shot, 'hit')
+            cpu_hits.append(cpu_shot)
+        else:
+            update_game_text(f"CPU missed your ship at {cpu_shot}. Marking")
+            update_square(PlayerBoard, cpu_shot, 'miss')
+    
+    else:
+        next_guesses = valid_placement(cpu_hits[0])
+        cpu_shot = random.choice(next_guesses)
+        while cpu_shot in cpu_shots:
+            cpu_shot = random.choice(next_guesses)
+        
+        if cpu_shot in Playerloc:
+            update_game_text(f"CPU hit your ship at {cpu_shot}. Marking")
+            update_square(PlayerBoard, cpu_shot, 'hit')
+            cpu_hits.append(cpu_shot)
+        else:
+            update_game_text(f"CPU missed your ship at {cpu_shot}. Marking")
+            update_square(PlayerBoard, cpu_shot, 'miss')
+    
+    cpu_shots.append(cpu_shot) 
+    pygame.time.delay(2000)
+
+    #CPU winner check
+    if len(cpu_hits)==2:
+        update_game_text("You lose! The machine uprising has begun!")
+
+        font = pygame.font.Font('freesansbold.ttf', 18)
+        text = font.render("Enter any value to close the game.", True, (0,0,0), (255,255,255))
+        textrect = text.get_rect()
+        textrect.center= (300, 525)
+        win.blit(text, textrect)
+        pygame.display.update()
+
+        user_wake()
+        pygame.quit()
     
     pygame.display.update()
 

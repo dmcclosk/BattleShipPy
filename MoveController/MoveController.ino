@@ -16,6 +16,7 @@ Keypad keypad = Keypad( makeKeymap(keys), rowPins, colPins, ROWS, COLS );
 
 void setup(){
    Serial.begin(9600);
+   delay(500);
 }
   
 void loop(){
